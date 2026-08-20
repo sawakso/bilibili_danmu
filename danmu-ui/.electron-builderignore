@@ -1,0 +1,7 @@
+# 后端自包含 exe 通过 extraResources 拷贝到 resources/backend，避免重复打进 asar
+backend-bin/
+dotnet-install.sh
+# 主进程已编译进 dist-electron，.ts 源码无需进包
+electron/**/*.ts
+# 历史发布产物（release/0.0.1 等）绝不能进包，否则会把旧 win-unpacked 递归打进去（+900MB）
+release/
