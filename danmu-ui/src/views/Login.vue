@@ -1,6 +1,6 @@
 <template>
     <div id="connect">
-        <img referrerpolicy="no-referrer"
+        <img class="bg-img" referrerpolicy="no-referrer"
             v-if="streamer.info.roomInfo?.backgroundUrl || streamer.info.roomInfo?.userCoverUrl"
             :src="streamer.info.roomInfo?.backgroundUrl || streamer.info.roomInfo?.userCoverUrl" alt="" srcset=""
             z-index="-100">
@@ -8,7 +8,7 @@
         <div class="contaienr">
             <el-avatar class="avatar" v-if="streamer.info.face" :src="streamer.info.face" :size="120"></el-avatar>
 
-            <img v-if="streamer.info.roomInfo?.userCoverUrl" style="border-radius: 10%; max-width: 100%; height: auto;"
+            <img v-if="streamer.info.roomInfo?.userCoverUrl" class="cover-img"
                 referrerpolicy="no-referrer" :src="streamer.info.roomInfo?.userCoverUrl" alt="" srcset="">
 
             <el-form class="user-input">
@@ -27,8 +27,8 @@
                             </el-option>
                         </el-select>
 
-                        <el-button type="success" @click="goHome"
-                            :disabled="streamer.info == null || streamer.info.roomInfo.liveStatus != 1">connect</el-button>
+                        <el-button type="success" round @click="goHome"
+                            :disabled="streamer.info == null || streamer.info.roomInfo.liveStatus != 1">连接</el-button>
                     </div>
                 </el-form-item>
             </el-form>
@@ -126,28 +126,43 @@ onBeforeMount(() => {
     justify-content: center;
     align-items: center;
     user-select: none;
+    background: #0f1116;
+    overflow: hidden;
+}
+
+// 背景图：铺满 + 压暗，让前景卡片更清晰
+.bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.45) saturate(1.15);
 }
 
 .contaienr {
-    position: absolute;
-    height: 300px;
+    position: relative;
+    min-height: 300px;
     width: 500px;
-    background-color: white;
-    border-radius: 10%;
-    box-shadow: 2px 2px 5px 5px rgba(0, 0, 0, 0.2);
-
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 20px;
+    box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-direction: column;
+    gap: 26px;
+    padding: 34px 30px;
+    box-sizing: border-box;
 }
 
 .avatar {
-    position: absolute;
-    left: -5%;
-    top: -20%;
-    box-shadow: 2px 2px 5px 5px rgba(0, 0, 0, 0.2);
-
-    transition: all 1s ease;
+    flex: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: transform 1s ease;
 
     &:hover {
         transform: rotate(360deg);
@@ -155,12 +170,26 @@ onBeforeMount(() => {
 }
 
 .user-input {
-    position: absolute;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+
+    :deep(.el-select) {
+        flex: 1;
+        min-width: 0;
+    }
+
+    :deep(.el-button) {
+        margin-left: 10px;
+        height: 32px;
+        flex: none;
+    }
 }
 
-img {
-    width: 100%;
-    height: 100%;
-    object-fit: fill;
+.cover-img {
+    border-radius: 12px;
+    max-width: 260px;
+    height: auto;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 </style>

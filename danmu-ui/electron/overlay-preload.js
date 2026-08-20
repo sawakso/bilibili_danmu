@@ -41,5 +41,13 @@ contextBridge.exposeInMainWorld('electron', {
   // 接收主窗口控制台同步过来的弹幕设置
   onDanmuSettings: (callback) => {
     ipcRenderer.on('danmu-settings', (event, settings) => callback(settings))
+  },
+  // 接收"区域调整"模式切换通知（true=进入编辑，false=退出）
+  onEditMode: (callback) => {
+    ipcRenderer.on('overlay-edit-mode', (event, editing) => callback(editing))
+  },
+  // 请求主进程切换"区域调整"模式（按钮触发，与快捷键等效）
+  toggleEditMode: () => {
+    ipcRenderer.send('overlay:edit-mode')
   }
 })

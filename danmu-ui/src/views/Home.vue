@@ -122,10 +122,20 @@
             <div class="section-title">快捷键</div>
             <div class="row">
                 <span class="label">鼠标穿透</span>
-                <button class="hotkey-box" :class="{ capturing }" @click="startCapture" title="点击后按下你想用的按键组合">
-                    {{ capturing ? '按下按键组合…' : hotkeyText }}
+                <button class="hotkey-box" :class="{ capturing: capturing && hotkeyType === 'mousePenetration' }"
+                    @click="startCapture('mousePenetration')" title="点击后按下你想用的按键组合">
+                    {{ capturing && hotkeyType === 'mousePenetration' ? '按下按键组合…' : hotkeyText }}
                 </button>
-                <button class="mini-btn" @click="resetHotkey">默认</button>
+                <button class="mini-btn" @click="resetHotkey('mousePenetration')">默认</button>
+            </div>
+            <div class="row">
+                <span class="label">调整弹幕区域</span>
+                <button class="hotkey-box" :class="{ capturing: capturing && hotkeyType === 'overlayEdit' }"
+                    @click="startCapture('overlayEdit')" title="点击后按下你想用的按键组合">
+                    {{ capturing && hotkeyType === 'overlayEdit' ? '按下按键组合…' : overlayEditText }}
+                </button>
+                <button class="mini-btn" @click="resetHotkey('overlayEdit')">默认</button>
+                <button class="mini-btn accent" @click="adjustArea" title="立即进入/退出弹幕区域调整模式">调整区域</button>
             </div>
             <div class="row" v-if="hotkeyMsg">
                 <span class="hint-msg" :class="{ ok: hotkeyOk }">{{ hotkeyMsg }}</span>
@@ -136,8 +146,8 @@
         <div class="section hint">
             <div class="section-title">操作说明</div>
             <ul>
-                <li>弹幕窗位置：鼠标移到弹幕盒上直接拖动；或点 🔓 解锁后拖动/缩放</li>
-                <li>快捷键：<b>{{ hotkeyText }}</b> 切换鼠标穿透（可在上方"快捷键"里自定义）</li>
+                <li>快捷键：<b>{{ hotkeyText }}</b> 切换鼠标穿透（可在上方自定义）</li>
+                <li>快捷键：<b>{{ overlayEditText }}</b> 进入/退出弹幕区域调整（或点「调整区域」按钮），进入后拖动/缩放弹幕框，调完再按一次保存</li>
                 <li>所有设置<b>即时生效</b>并自动保存、同步到置顶弹幕窗</li>
             </ul>
         </div>
@@ -262,8 +272,10 @@ const clearBlock = () => {
     apply()
 }
 
-// ---- 鼠标穿透快捷键（可自定义、持久化、即时生效） ----
+// ---- 快捷键（可自定义、持久化、即时生效）：鼠标穿透 / 调整弹幕区域 ----
 const hotkey = ref('CommandOrControl+Shift+G')
+const overlayEditHotkey = ref('CommandOrControl+Shift+E')
+const hotkeyType = ref<'mousePenetration' | 'overlayEdit'>('mousePenetration')
 const capturing = ref(false)
 const hotkeyMsg = ref('')
 const hotkeyOk = ref(false)
@@ -279,17 +291,20 @@ const humanize = (acc: string): string => {
 }
 
 const hotkeyText = computed(() => humanize(hotkey.value))
+const overlayEditText = computed(() => humanize(overlayEditHotkey.value))
 
 // 读取主进程保存的快捷键
 const fetchHotkey = async () => {
     try {
         const cfg = await window.electron.getConfig()
         if (cfg && cfg.mousePenetrationHotkey) hotkey.value = cfg.mousePenetrationHotkey
+        if (cfg && cfg.overlayEditHotkey) overlayEditHotkey.value = cfg.overlayEditHotkey
     } catch (e) { /* 老版本无此接口时忽略 */ }
 }
 
-const startCapture = () => {
+const startCapture = (type: 'mousePenetration' | 'overlayEdit' = 'mousePenetration') => {
     if (capturing.value) return
+    hotkeyType.value = type
     capturing.value = true
     hotkeyMsg.value = ''
     hotkeyOk.value = false
@@ -332,7 +347,7 @@ const onCaptureKey = (e: KeyboardEvent) => {
     parts.push(main)
     const acc = parts.join('+')
     endCapture()
-    applyHotkey(acc)
+    applyHotkey(acc, hotkeyType.value)
 }
 
 const endCapture = () => {
@@ -340,11 +355,12 @@ const endCapture = () => {
     window.removeEventListener('keydown', onCaptureKey, true)
 }
 
-const applyHotkey = async (acc: string) => {
+const applyHotkey = async (acc: string, type: 'mousePenetration' | 'overlayEdit' = 'mousePenetration') => {
     try {
-        const res = await window.electron.setHotkey(acc)
+        const res = await window.electron.setHotkey(type, acc)
         if (res && res.ok) {
-            hotkey.value = res.accelerator || acc
+            if (type === 'overlayEdit') overlayEditHotkey.value = res.accelerator || acc
+            else hotkey.value = res.accelerator || acc
             hotkeyMsg.value = '已保存，全局快捷键即时生效'
             hotkeyOk.value = true
         } else {
@@ -357,7 +373,13 @@ const applyHotkey = async (acc: string) => {
     }
 }
 
-const resetHotkey = () => applyHotkey('CommandOrControl+Shift+G')
+const resetHotkey = (type: 'mousePenetration' | 'overlayEdit' = 'mousePenetration') =>
+    applyHotkey(type === 'overlayEdit' ? 'CommandOrControl+Shift+E' : 'CommandOrControl+Shift+G', type)
+
+// 立即进入/退出弹幕区域调整模式（等效于按快捷键）
+const adjustArea = () => {
+    if (window.electron.toggleEditMode) window.electron.toggleEditMode()
+}
 
 const connectRoom = () => {
     if (streamer.info.roomInfo?.roomId > 0) {
@@ -396,7 +418,7 @@ onMounted(() => {
     height: 100%;
     box-sizing: border-box;
     padding: 14px;
-    background: linear-gradient(160deg, #1c1f26 0%, #14161b 100%);
+    background: linear-gradient(165deg, #1d2130 0%, #161925 55%, #10121a 100%);
     color: #e8eaed;
     display: flex;
     flex-direction: column;
@@ -437,6 +459,10 @@ onMounted(() => {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        background: linear-gradient(90deg, #7cf0c0, #3ad17a 55%, #2dd4bf);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
     }
 
     .room {
@@ -446,17 +472,34 @@ onMounted(() => {
 }
 
 .section {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
     padding: 12px;
     flex: none;
+    transition: border-color 0.15s ease;
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.14);
+    }
 
     .section-title {
         font-size: 12px;
         color: #9aa3af;
         margin-bottom: 10px;
         letter-spacing: 1px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        &::before {
+            content: '';
+            width: 3px;
+            height: 12px;
+            border-radius: 2px;
+            background: linear-gradient(180deg, #3ad17a, #2dd4bf);
+            flex: none;
+        }
     }
 }
 
@@ -525,9 +568,19 @@ onMounted(() => {
         font-size: 12px;
         cursor: pointer;
         flex: none;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
         &:hover {
             background: rgba(255, 255, 255, 0.14);
+        }
+
+        &.accent {
+            color: #3ad17a;
+            border-color: rgba(58, 209, 122, 0.6);
+
+            &:hover {
+                background: rgba(58, 209, 122, 0.12);
+            }
         }
 
         &.danger {
@@ -658,6 +711,7 @@ onMounted(() => {
         padding: 5px 12px;
         font-size: 12px;
         cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
 
         &:hover {
             background: rgba(255, 255, 255, 0.14);

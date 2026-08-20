@@ -1,17 +1,21 @@
 <template>
     <div id="overlay">
-        <!-- 可拖拽/缩放的弹幕盒子；默认鼠标穿透，悬停或解锁后可拖动定位 -->
-        <v-d-r class="danmu-box" :class="{ 'box-active': !clickThrough }" :style="boxStyle" :w="box.w" :h="box.h"
-            :x="box.x" :y="box.y" :resizable="true" :parent="true" :draggable="true" @drag-end="onDragEnd"
-            @resize-end="onResizeEnd" @mouseenter="onEnter" @mouseleave="onLeave">
+        <!-- 弹幕盒：正常模式鼠标穿透；"区域调整"模式下可拖拽/缩放 -->
+        <v-d-r class="danmu-box" :class="{ 'box-active': !clickThrough || editMode, 'edit-mode': editMode }"
+            :style="boxStyle" :w="box.w" :h="box.h" :x="box.x" :y="box.y" :resizable="editMode" :parent="true"
+            :draggable="editMode" @drag-end="onDragEnd" @resize-end="onResizeEnd" @mouseenter="onEnter"
+            @mouseleave="onLeave">
 
             <div class="title-bar" @mousedown="onEnter">
                 <span class="dot" :class="signalR.connected() ? 'on' : 'off'"></span>
                 <span class="title" :title="streamser.info.roomInfo?.title">{{ streamser.info.roomInfo?.title || '弹幕姬'
                     }}</span>
-                <button class="lock-btn" :title="clickThrough ? '已锁定(鼠标穿透)，点击解锁可拖动' : '已解锁，点击锁定为鼠标穿透'"
+                <button v-if="editMode" class="lock-btn done" title="完成调整并恢复鼠标穿透" @click.stop="finishEdit">完成</button>
+                <button v-else class="lock-btn" :title="clickThrough ? '已锁定(鼠标穿透)，点击解锁可拖动' : '已解锁，点击锁定为鼠标穿透'"
                     @click.stop="toggleLock">{{ clickThrough ? '🔒' : '🔓' }}</button>
             </div>
+
+            <div v-if="editMode" class="edit-tip">调整模式：拖动/缩放弹幕框，完成后按快捷键或点「完成」</div>
 
             <div v-if="statusMsg" class="status-msg">{{ statusMsg }}</div>
 
@@ -63,21 +67,26 @@ const boxStyle = computed(() => {
 const clickThrough = ref(true)
 const hovering = ref(false)
 
+// "区域调整"模式：快捷键/主窗口按钮进入后，解除穿透、弹幕框可拖拽缩放
+const editMode = ref(false)
+
 // 连接状态提示
 const statusMsg = computed(() => {
     if (!signalR.connected()) return '未连接弹幕服务（请确认后端 LiveServer 已启动且房间正在直播）'
     return ''
 })
 
-// 计算当前是否应忽略鼠标：穿透模式 且 未悬停 -> 忽略（穿透）；其余 -> 捕获（可拖动/点击）
+// 计算当前是否应忽略鼠标：调整模式 或 穿透模式且未悬停 -> 忽略；其余 -> 捕获（可拖动/点击）
 const applyIgnoreMouse = () => {
-    const ignore = clickThrough.value && !hovering.value
+    const ignore = editMode.value ? false : (clickThrough.value && !hovering.value)
     window.electron.setIgnoreMouse(ignore)
 }
 
 const onEnter = () => { hovering.value = true; applyIgnoreMouse() }
 const onLeave = () => { hovering.value = false; applyIgnoreMouse() }
 const toggleLock = () => { clickThrough.value = !clickThrough.value; applyIgnoreMouse() }
+// 点"完成"退出调整模式（等效于再次按快捷键）
+const finishEdit = () => { window.electron.toggleEditMode() }
 
 const persist = () => {
     try { localStorage.setItem('danmu-box', JSON.stringify({ ...box })) } catch { }
@@ -103,6 +112,15 @@ onBeforeMount(() => {
         window.electron.onDanmuSettings((s: any) => {
             if (s) Object.assign(settings, s)
             try { localStorage.setItem('danmu-settings', JSON.stringify({ ...settings })) } catch { }
+        })
+    }
+
+    // 接收"区域调整"模式切换：进入后解除穿透可拖拽，退出后恢复穿透
+    if (window.electron.onEditMode) {
+        window.electron.onEditMode((editing: boolean) => {
+            editMode.value = !!editing
+            if (editing) hovering.value = true
+            applyIgnoreMouse()
         })
     }
 
@@ -155,6 +173,22 @@ onMounted(() => {
         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
     }
 
+    &.edit-mode {
+        border: 2px dashed #3ad17a;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.25);
+    }
+
+    .edit-tip {
+        color: #3ad17a;
+        font-size: 12px;
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.65);
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .title-bar {
         height: 30px;
         display: flex;
@@ -199,6 +233,14 @@ onMounted(() => {
             font-size: 14px;
             line-height: 1;
             padding: 2px 4px;
+
+            &.done {
+                color: #3ad17a;
+                border: 1px solid rgba(58, 209, 122, 0.6);
+                border-radius: 4px;
+                font-size: 13px;
+                padding: 3px 8px;
+            }
         }
     }
 

@@ -73,8 +73,17 @@ contextBridge.exposeInMainWorld('electron', {
   getConfig: () => {
     return ipcRenderer.invoke('get-config')
   },
-  // 设置并即时生效"切换鼠标穿透"快捷键，返回 { ok, accelerator }
-  setHotkey: (acc) => {
-    return ipcRenderer.invoke('set-hotkey', acc)
+  // 请求切换 Overlay"区域调整"模式（等效于按快捷键）
+  toggleEditMode: () => {
+    ipcRenderer.send('overlay:edit-mode')
+  },
+  // 设置并即时生效快捷键，返回 { ok, accelerator }
+  // key: 'mousePenetration'（默认）或 'overlayEdit'；兼容旧调用 setHotkey(acc)
+  setHotkey: (key, acc) => {
+    if (acc === undefined) {
+      acc = key
+      key = 'mousePenetration'
+    }
+    return ipcRenderer.invoke('set-hotkey', key, acc)
   }
 })

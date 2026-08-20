@@ -11,7 +11,7 @@
             </div>
 
             <div class="rows">
-                <transition-group appear tag="ul" name="danmu">
+                <transition-group appear tag="ul" name="danmu" class="danmu-list">
                     <template v-for="item in visibleComments" :key="item.key">
                         <div :class="{ 'message': true }">
                             <div class="avatar-medal-name ">
@@ -216,9 +216,16 @@ onBeforeMount(() => {
     .rows {
         font-size: var(--dm-font-size);
         color: white;
-        display: flex;
-        flex-direction: column;
-        gap: var(--dm-line-gap);
+
+        // 弹幕行容器（transition-group 渲染的 ul）：flex 纵向排列，行距由 --dm-line-gap 控制
+        .danmu-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--dm-line-gap);
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
 
         .message {
             display: flex;

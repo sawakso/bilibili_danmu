@@ -48,6 +48,39 @@ const registerToggleShortcut = (): boolean => {
   }
 }
 
+// ---- "弹幕区域调整"模式 ----
+// 进入：Overlay 解除鼠标穿透、显示可拖拽/缩放的编辑框；退出：恢复穿透并保存位置尺寸。
+// 穿透状态统一由渲染层（Overlay.vue）根据 editMode 控制，主进程只负责切换状态与通知。
+let isOverlayEditing = false
+const toggleOverlayEdit = (): void => {
+  if (overlayWindow == null || overlayWindow.isDestroyed()) return
+  isOverlayEditing = !isOverlayEditing
+  console.log('[overlay] 区域调整模式:', isOverlayEditing ? '开' : '关')
+  overlayWindow.webContents.send('overlay-edit-mode', isOverlayEditing)
+}
+
+// 注册"进入/退出区域调整"全局快捷键（默认 CommandOrControl+Shift+E，可自定义）
+let registeredEditHotkey: string | null = null
+const registerOverlayEditShortcut = (): boolean => {
+  if (registeredEditHotkey) {
+    globalShortcut.unregister(registeredEditHotkey)
+    registeredEditHotkey = null
+  }
+  const acc = (getConfig().overlayEditHotkey || 'CommandOrControl+Shift+E').trim()
+  try {
+    const ok = globalShortcut.register(acc, () => toggleOverlayEdit())
+    if (ok) {
+      registeredEditHotkey = acc
+      return true
+    }
+    console.warn('[hotkey] 区域调整快捷键注册失败（可能被系统/其他软件占用）:', acc)
+    return false
+  } catch (err) {
+    console.warn('[hotkey] 区域调整快捷键注册异常:', err)
+    return false
+  }
+}
+
 // 打包后随应用自带的 .NET 弹幕后端（LiveServer）。启动后等待其监听端口就绪，供渲染端连接。
 let liveServerProc: any = null
 const LIVE_SERVER_PORT = 5000
@@ -126,9 +159,10 @@ if (!gotTheLock) {
       app.dock.setIcon(path.join(__dirname, '../electron/app-100.png'))
     }
 
-    // 加载用户配置并注册"切换鼠标穿透"全局快捷键（Overlay 创建后会再次注册，幂等）
+    // 加载用户配置并注册全局快捷键（Overlay 创建后会再次注册，幂等）
     loadConfig()
     registerToggleShortcut()
+    registerOverlayEditShortcut()
 
     // 启动随包自带的 .NET 弹幕后端（开发期不接管）；后台异步等待端口就绪，不阻塞 UI
     startLiveServer()
@@ -261,8 +295,9 @@ ipcMain.once('runService', () => {
 ipcMain.on('overlay', (e, info) => {
 
   createOverlayWindow(() => {
-    // 注册（或重注册）"切换鼠标穿透"全局快捷键，加速器来自用户配置
+    // 注册（或重注册）全局快捷键，加速器来自用户配置
     registerToggleShortcut()
+    registerOverlayEditShortcut()
 
     console.debug('send streamer info to overlay')
     overlayWindow.webContents.send('receiveStreamerInfo', info)
@@ -300,13 +335,24 @@ ipcMain.handle('get-config', () => {
   return getConfig()
 })
 
-// 渲染端设置并即时生效"切换鼠标穿透"快捷键；返回是否注册成功
-ipcMain.handle('set-hotkey', (e, acc: string) => {
+// 渲染端设置并即时生效全局快捷键；返回是否注册成功
+// key: 'mousePenetration'（默认）或 'overlayEdit'
+ipcMain.handle('set-hotkey', (e, key: string, acc: string) => {
   const trimmed = (acc || '').trim()
   if (!trimmed) return { ok: false, error: 'empty' }
+  if (key === 'overlayEdit') {
+    setConfig({ overlayEditHotkey: trimmed })
+    const ok = registerOverlayEditShortcut()
+    return { ok, accelerator: getConfig().overlayEditHotkey }
+  }
   setConfig({ mousePenetrationHotkey: trimmed })
   const ok = registerToggleShortcut()
   return { ok, accelerator: getConfig().mousePenetrationHotkey }
+})
+
+// Overlay 渲染层按钮触发"进入/退出区域调整"（与快捷键等效）
+ipcMain.on('overlay:edit-mode', () => {
+  toggleOverlayEdit()
 })
 
 // 退出时清理全局快捷键与自带后端进程
