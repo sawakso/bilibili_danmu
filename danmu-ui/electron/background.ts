@@ -364,6 +364,14 @@ ipcMain.on('set-room-id', (_e, roomId: number) => {
   currentRoomId = Number(roomId) || 0
 })
 
+// 隐藏主控制台到托盘（OBS 显示器采集时避免控制台入镜）；托盘点击恢复
+ipcMain.on('hide-main-window', () => {
+  if (mainWindow != null && !mainWindow.isDestroyed()) {
+    mainWindow.setSkipTaskbar(true)
+    mainWindow.hide()
+  }
+})
+
 // 退出时清理全局快捷键与自带后端进程
 // 用 taskkill /F /T 杀整个进程树，确保 .NET 后端及其子进程全部退出、不留僵尸进程
 const killProcessTree = (proc: any) => {

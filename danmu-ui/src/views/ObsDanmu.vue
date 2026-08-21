@@ -69,7 +69,8 @@ const settings = reactive({
 const load = () => { try { const s = localStorage.getItem('obs-danmu-settings'); if (s) Object.assign(settings, JSON.parse(s)) } catch { } }
 const persist = () => { try { localStorage.setItem('obs-danmu-settings', JSON.stringify({ ...settings })) } catch { } }
 
-const showSettings = ref(true)
+// OBS 截图里默认不显示设置条，只显示纯弹幕（齿轮可随时调出），避免占用画面
+const showSettings = ref(false)
 const roomIdInput = ref(0)
 const connecting = ref(false)
 
@@ -247,16 +248,16 @@ body {
 
 .gear {
     position: absolute;
-    top: 6px;
+    bottom: 6px;
     right: 8px;
     z-index: 10;
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.85);
-    background: rgba(0, 0, 0, 0.4);
+    color: rgba(255, 255, 255, 0.65);
+    background: rgba(0, 0, 0, 0.35);
     border-radius: 50%;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -81,6 +81,10 @@ contextBridge.exposeInMainWorld('electron', {
   setRoomId: (roomId) => {
     ipcRenderer.send('set-room-id', roomId)
   },
+  // 隐藏主控制台到托盘（OBS 显示器采集时避免入镜）
+  hideWindow: () => {
+    ipcRenderer.send('hide-main-window')
+  },
   // 设置并即时生效快捷键，返回 { ok, accelerator }
   // key: 'mousePenetration'（默认）或 'overlayEdit'；兼容旧调用 setHotkey(acc)
   setHotkey: (key, acc) => {

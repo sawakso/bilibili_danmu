@@ -83,6 +83,11 @@
                     <input type="checkbox" v-model="settings.showMedal" @change="apply" />
                     <span>粉丝牌</span>
                 </label>
+                <label class="switch-item">
+                    <input type="checkbox" v-model="settings.showOverlay" @change="apply"
+                        title="屏幕上的弹幕悬浮窗；用 OBS 浏览器源时建议关掉，避免重复显示" />
+                    <span>屏幕弹幕窗</span>
+                </label>
             </div>
         </div>
 
@@ -176,6 +181,7 @@ const DEFAULT_SETTINGS = {
     lineGap: 8,
     showAvatar: true,
     showMedal: true,
+    showOverlay: true,        // 屏幕弹幕悬浮窗开关（用 OBS 浏览器源时可关掉）
     fontFamily: 'Microsoft YaHei',
     fontColor: '',
     strokeWidth: 1,
@@ -406,7 +412,10 @@ onMounted(() => {
     useStorage('streamer', streamer.info)
     try {
         window.electron.runService()
-        window.electron.overlay(JSON.parse(JSON.stringify(streamer.info)))
+        // 屏幕弹幕窗开关：用 OBS 浏览器源时可关闭，避免重复显示/被显示器采集拍到
+        if (settings.showOverlay) {
+            window.electron.overlay(JSON.parse(JSON.stringify(streamer.info)))
+        }
     } catch (error) {
         console.log(error);
     }
@@ -414,6 +423,10 @@ onMounted(() => {
     fetchHotkey()
     // Overlay 打开后把当前设置同步过去
     setTimeout(() => apply(), 1200)
+    // 连接后自动隐藏控制台到托盘（点托盘图标恢复），避免被 OBS 显示器采集拍到
+    if (window.electron.hideWindow) {
+        setTimeout(() => window.electron.hideWindow(), 8000)
+    }
 })
 </script>
 
