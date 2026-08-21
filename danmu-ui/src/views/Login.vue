@@ -144,19 +144,19 @@ onBeforeMount(() => {
 .contaienr {
     position: relative;
     min-height: 300px;
-    width: 500px;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 20px;
-    box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+    width: 420px;
+    background: rgba(18, 20, 38, 0.78);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(140, 155, 255, 0.18);
+    border-radius: 18px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    gap: 26px;
-    padding: 34px 30px;
+    gap: 24px;
+    padding: 30px 28px;
     box-sizing: border-box;
 }
 

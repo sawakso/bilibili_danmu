@@ -577,18 +577,18 @@ onMounted(() => {
         z-index: 0;
     }
     &::before {
-        width: 230px;
-        height: 230px;
-        background: rgba(102, 126, 234, 0.18);
-        top: -70px;
-        right: -70px;
+        width: 180px;
+        height: 180px;
+        background: rgba(102, 126, 234, 0.10);
+        top: -60px;
+        right: -50px;
     }
     &::after {
-        width: 190px;
-        height: 190px;
-        background: rgba(58, 209, 122, 0.10);
-        bottom: -60px;
-        left: -60px;
+        width: 150px;
+        height: 150px;
+        background: rgba(58, 209, 122, 0.06);
+        bottom: -50px;
+        left: -50px;
     }
 
     &::-webkit-scrollbar {
@@ -659,9 +659,7 @@ onMounted(() => {
     border-radius: 16px;
     padding: 13px 14px;
     flex: none;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.16);
+    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.2);
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
 
     &:hover {
