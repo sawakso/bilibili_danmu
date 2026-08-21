@@ -24,6 +24,9 @@
                 <button class="mini-btn" @click="quickSwitchObs" :disabled="controlTarget === 'obs'">
                     {{ controlTarget === 'obs' ? '已切换 ✓' : '切到 OBS 弹幕' }}
                 </button>
+                <button class="mini-btn accent" @click="syncNow" title="把当前所有弹幕设置立即推送给 OBS（不管控制目标）">
+                    {{ lastSync ? '已同步 ' + lastSync : '立即同步到 OBS' }}
+                </button>
             </div>
         </div>
 
@@ -279,10 +282,22 @@ const persist = () => {
     try { localStorage.setItem(targetKey(), JSON.stringify({ ...settings })) } catch { }
 }
 
+// 推送到 OBS（走 HTTP POST 到主进程 3001，绕开 IPC；IPC 保留作双保险）
+const pushToObs = async (s: any) => {
+    try {
+        await fetch('http://127.0.0.1:3001/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(s),
+        })
+    } catch (e) { /* ignore */ }
+}
+
 const apply = () => {
     persist()
     if (controlTarget.value === 'obs') {
-        // 同步到 OBS 弹幕页（主进程缓存 -> OBS 页轮询 /api/settings 应用）
+        // 同步到 OBS 弹幕页（HTTP POST + IPC 双通道）
+        pushToObs({ ...settings })
         if (window.electron.sendObsSettings) window.electron.sendObsSettings({ ...settings })
     } else {
         // 同步到本机屏幕弹幕窗（IPC + storage 事件双通道）
@@ -300,6 +315,18 @@ const switchTarget = () => {
 const quickSwitchObs = () => {
     controlTarget.value = 'obs'
     switchTarget()
+}
+
+// 立即同步当前设置到 OBS（不依赖控制目标，显式推送）
+const lastSync = ref('')
+const syncNow = () => {
+    pushToObs({ ...settings })
+    try {
+        if (window.electron.sendObsSettings) window.electron.sendObsSettings({ ...settings })
+    } catch (e) { /* ignore */ }
+    const d = new Date()
+    lastSync.value = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+    setTimeout(() => (lastSync.value = ''), 5000)
 }
 
 const setColor = (c: string) => {
@@ -502,6 +529,17 @@ onMounted(() => {
     }
     // 读取已保存的鼠标穿透快捷键，没有则保持默认
     fetchHotkey()
+    // 诊断上报：window.electron 接口可见性（排查 OBS 设置不同步）
+    try {
+        if (window.electron.diag) {
+            window.electron.diag({
+                has: typeof window.electron.sendObsSettings,
+                keys: Object.keys(window.electron),
+                target: controlTarget.value,
+                url: window.location.href,
+            })
+        }
+    } catch (e) { /* ignore */ }
     // Overlay 打开后把当前设置同步过去
     setTimeout(() => apply(), 1200)
     // 连接后自动隐藏控制台到托盘（点托盘图标恢复），避免被 OBS 显示器采集拍到
@@ -513,16 +551,56 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .panel {
+    position: relative;
     height: 100%;
     box-sizing: border-box;
-    padding: 14px;
-    background: linear-gradient(165deg, #1d2130 0%, #161925 55%, #10121a 100%);
-    color: #e8eaed;
+    padding: 16px;
+    background:
+        radial-gradient(120% 60% at 85% -10%, rgba(102, 126, 234, 0.20), transparent 55%),
+        radial-gradient(100% 50% at -10% 110%, rgba(118, 75, 162, 0.16), transparent 55%),
+        linear-gradient(168deg, #151731 0%, #0f1124 55%, #0b0c1a 100%);
+    color: #e6e8f2;
     display: flex;
     flex-direction: column;
     gap: 12px;
     user-select: none;
     overflow-y: auto;
+    overflow-x: hidden;
+
+    &::before,
+    &::after {
+        content: '';
+        position: fixed;
+        border-radius: 50%;
+        filter: blur(70px);
+        pointer-events: none;
+        z-index: 0;
+    }
+    &::before {
+        width: 230px;
+        height: 230px;
+        background: rgba(102, 126, 234, 0.18);
+        top: -70px;
+        right: -70px;
+    }
+    &::after {
+        width: 190px;
+        height: 190px;
+        background: rgba(58, 209, 122, 0.10);
+        bottom: -60px;
+        left: -60px;
+    }
+
+    &::-webkit-scrollbar {
+        width: 6px;
+    }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(140, 155, 255, 0.25);
+        border-radius: 3px;
+    }
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
 }
 
 .header {
@@ -530,7 +608,7 @@ onMounted(() => {
     align-items: center;
     gap: 8px;
     padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(140, 155, 255, 0.12);
     flex: none;
 
     .dot {
@@ -541,61 +619,73 @@ onMounted(() => {
 
         &.on {
             background: #3ad17a;
-            box-shadow: 0 0 8px #3ad17a;
+            box-shadow: 0 0 10px #3ad17a, 0 0 20px rgba(58, 209, 122, 0.4);
         }
 
         &.off {
             background: #ff5b5b;
-            box-shadow: 0 0 8px #ff5b5b;
+            box-shadow: 0 0 10px #ff5b5b;
         }
     }
 
     .title {
         flex: 1;
         font-size: 14px;
-        font-weight: 600;
+        font-weight: 700;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        background: linear-gradient(90deg, #7cf0c0, #3ad17a 55%, #2dd4bf);
+        background: linear-gradient(90deg, #a8b8ff, #7b8cff 55%, #9d8bff);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
+        letter-spacing: 0.3px;
     }
 
     .room {
         font-size: 12px;
-        color: #9aa3af;
+        color: #8b93b8;
+        background: rgba(102, 126, 234, 0.14);
+        border: 1px solid rgba(140, 155, 255, 0.2);
+        padding: 1px 7px;
+        border-radius: 10px;
     }
 }
 
 .section {
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 12px;
+    position: relative;
+    background: rgba(110, 130, 245, 0.05);
+    border: 1px solid rgba(140, 155, 255, 0.12);
+    border-radius: 16px;
+    padding: 13px 14px;
     flex: none;
-    transition: border-color 0.15s ease;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.16);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 
     &:hover {
-        border-color: rgba(255, 255, 255, 0.14);
+        border-color: rgba(140, 155, 255, 0.24);
+        box-shadow: 0 6px 26px rgba(0, 0, 0, 0.22);
     }
 
     .section-title {
-        font-size: 12px;
-        color: #9aa3af;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #9fb0ff;
         margin-bottom: 10px;
-        letter-spacing: 1px;
+        letter-spacing: 1.2px;
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 7px;
 
         &::before {
             content: '';
             width: 3px;
-            height: 12px;
+            height: 13px;
             border-radius: 2px;
-            background: linear-gradient(180deg, #3ad17a, #2dd4bf);
+            background: linear-gradient(180deg, #8fa4ff, #667eea);
+            box-shadow: 0 0 8px rgba(102, 126, 234, 0.55);
             flex: none;
         }
     }
@@ -614,13 +704,13 @@ onMounted(() => {
     .label {
         width: 44px;
         font-size: 13px;
-        color: #c6ccd4;
+        color: #c3c9e2;
         flex: none;
     }
 
     input[type="range"] {
         flex: 1;
-        accent-color: #3ad17a;
+        accent-color: #8fa4ff;
         min-width: 0;
     }
 
@@ -628,36 +718,50 @@ onMounted(() => {
         width: 52px;
         text-align: right;
         font-size: 12px;
-        color: #9aa3af;
+        color: #8b93b8;
         flex: none;
+        font-variant-numeric: tabular-nums;
     }
 
     .select {
         flex: 1;
-        background: rgba(255, 255, 255, 0.08);
-        color: #e8eaed;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        color: #e6e8f2;
+        border: 1px solid rgba(140, 155, 255, 0.16);
+        border-radius: 8px;
         padding: 4px 8px;
         font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+        &:focus {
+            border-color: rgba(140, 155, 255, 0.5);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
+        }
 
         option {
-            background: #1c1f26;
+            background: #12142a;
         }
     }
 
     .text-input {
         flex: 1;
         min-width: 0;
-        background: rgba(255, 255, 255, 0.08);
-        color: #e8eaed;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 6px;
-        padding: 4px 8px;
+        background: rgba(255, 255, 255, 0.05);
+        color: #e6e8f2;
+        border: 1px solid rgba(140, 155, 255, 0.16);
+        border-radius: 8px;
+        padding: 4px 9px;
         font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+        &:focus {
+            border-color: rgba(140, 155, 255, 0.5);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
+        }
     }
 
-    // OBS 浏览器源链接框：紧凑等宽，一眼可复制
     .obs-url {
         flex: none;
         width: 235px;
@@ -668,32 +772,46 @@ onMounted(() => {
     }
 
     .mini-btn {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        color: #e8eaed;
-        border-radius: 6px;
-        padding: 4px 10px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(140, 155, 255, 0.16);
+        color: #d9def2;
+        border-radius: 8px;
+        padding: 4px 11px;
         font-size: 12px;
         cursor: pointer;
         flex: none;
-        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 
         &:hover {
-            background: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(140, 155, 255, 0.34);
+        }
+
+        &:disabled {
+            opacity: 0.55;
+            cursor: default;
         }
 
         &.accent {
-            color: #3ad17a;
-            border-color: rgba(58, 209, 122, 0.6);
+            color: #fff;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-color: transparent;
+            box-shadow: 0 2px 12px rgba(102, 126, 234, 0.35);
 
             &:hover {
-                background: rgba(58, 209, 122, 0.12);
+                box-shadow: 0 4px 18px rgba(102, 126, 234, 0.5);
+                filter: brightness(1.08);
+                background: linear-gradient(135deg, #667eea, #764ba2);
             }
         }
 
         &.danger {
-            border-color: rgba(255, 91, 91, 0.5);
-            color: #ff6b6b;
+            border-color: rgba(255, 91, 91, 0.45);
+            color: #ff8080;
+
+            &:hover {
+                background: rgba(255, 91, 91, 0.14);
+            }
         }
     }
 
@@ -704,16 +822,17 @@ onMounted(() => {
         margin-bottom: 10px;
 
         .tag {
-            background: rgba(255, 91, 91, 0.15);
-            border: 1px solid rgba(255, 91, 91, 0.35);
-            color: #ffb3b3;
+            background: rgba(255, 91, 91, 0.13);
+            border: 1px solid rgba(255, 91, 91, 0.32);
+            color: #ffb8b8;
             border-radius: 12px;
-            padding: 2px 8px;
+            padding: 2px 9px;
             font-size: 12px;
             cursor: pointer;
+            transition: background 0.15s ease;
 
             &:hover {
-                background: rgba(255, 91, 91, 0.28);
+                background: rgba(255, 91, 91, 0.26);
             }
         }
     }
@@ -738,6 +857,11 @@ onMounted(() => {
         align-items: center;
         justify-content: center;
         font-size: 10px;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+
+        &:hover {
+            transform: scale(1.12);
+        }
 
         &.auto {
             background: linear-gradient(135deg, #888 50%, #444 50%);
@@ -745,8 +869,8 @@ onMounted(() => {
         }
 
         &.active {
-            border-color: #3ad17a;
-            box-shadow: 0 0 6px #3ad17a;
+            border-color: #8fa4ff;
+            box-shadow: 0 0 8px rgba(143, 164, 255, 0.7);
         }
     }
 
@@ -763,7 +887,7 @@ onMounted(() => {
 
     .hex {
         font-size: 11px;
-        color: #9aa3af;
+        color: #8b93b8;
         flex: none;
         max-width: 76px;
         overflow: hidden;
@@ -780,27 +904,32 @@ onMounted(() => {
         align-items: center;
         gap: 6px;
         font-size: 13px;
-        color: #c6ccd4;
+        color: #c3c9e2;
         cursor: pointer;
+        transition: color 0.15s ease;
+
+        &:hover {
+            color: #e6e8f2;
+        }
 
         input {
-            accent-color: #3ad17a;
+            accent-color: #8fa4ff;
         }
     }
 }
 
 .target-row {
-    background: rgba(58, 209, 122, 0.06);
-    border: 1px solid rgba(58, 209, 122, 0.18);
-    border-radius: 8px;
-    padding: 6px 8px;
-    gap: 14px;
+    background: rgba(102, 126, 234, 0.08);
+    border: 1px solid rgba(140, 155, 255, 0.2);
+    border-radius: 10px;
+    padding: 6px 9px;
+    gap: 12px;
 
     .target-hint {
         flex: 1;
         text-align: right;
         font-size: 12px;
-        color: #3ad17a;
+        color: #9fb0ff;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -814,11 +943,11 @@ onMounted(() => {
         margin: 0;
         padding-left: 16px;
         font-size: 12px;
-        color: #9aa3af;
+        color: #8b93b8;
         line-height: 1.9;
 
         b {
-            color: #c6ccd4;
+            color: #c3c9e2;
         }
     }
 }
@@ -828,19 +957,22 @@ onMounted(() => {
     align-items: center;
     justify-content: space-between;
     flex: none;
+    padding-top: 2px;
 
     .btn {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: #e8eaed;
-        border-radius: 6px;
-        padding: 5px 12px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(140, 155, 255, 0.16);
+        color: #d9def2;
+        border-radius: 8px;
+        padding: 5px 13px;
         font-size: 12px;
         cursor: pointer;
-        transition: background 0.15s ease, border-color 0.15s ease;
+        transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 
         &:hover {
-            background: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(140, 155, 255, 0.34);
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.25);
         }
     }
 
@@ -852,36 +984,40 @@ onMounted(() => {
         }
 
         &.bad {
-            color: #ff5b5b;
+            color: #ff6b6b;
         }
     }
 }
+
 .hotkey-box {
     flex: 1;
     min-width: 0;
-    background: rgba(255, 255, 255, 0.08);
-    color: #e8eaed;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #e6e8f2;
+    border: 1px solid rgba(140, 155, 255, 0.16);
+    border-radius: 8px;
     padding: 5px 10px;
     font-size: 13px;
     cursor: pointer;
     text-align: left;
+    outline: none;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 
     &:hover {
-        background: rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.11);
+        border-color: rgba(140, 155, 255, 0.34);
     }
 
     &.capturing {
-        border-color: #3ad17a;
-        color: #3ad17a;
-        box-shadow: 0 0 6px rgba(58, 209, 122, 0.5);
+        border-color: #8fa4ff;
+        color: #a8b8ff;
+        box-shadow: 0 0 10px rgba(143, 164, 255, 0.4);
     }
 }
 
 .hint-msg {
     font-size: 12px;
-    color: #ff6b6b;
+    color: #ff8080;
 
     &.ok {
         color: #3ad17a;

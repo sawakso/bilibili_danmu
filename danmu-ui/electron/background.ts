@@ -327,6 +327,10 @@ ipcMain.on('overlay:set-ignore-mouse', (e, ignore) => {
 
 // 主窗口控制台 -> Overlay 同步弹幕设置
 ipcMain.on('danmu-settings', (e, settings) => {
+  try {
+    fs.appendFileSync(path.join(app.getPath('temp'), 'livedanmu-obs.log'),
+      `${new Date().toISOString()} [danmu-settings] ${JSON.stringify(settings).slice(0, 200)}\n`)
+  } catch (err) { /* ignore */ }
   lastDanmuSettings = settings
   if (overlayWindow != null && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('danmu-settings', settings)
@@ -373,8 +377,21 @@ ipcMain.on('hide-main-window', () => {
 
 // 控制台切到"OBS 弹幕"时推送的设置：缓存供 OBS 浏览器源轮询，并实时 SSE 推送给已打开的弹幕页
 ipcMain.on('set-obs-settings', (_e, s: any) => {
+  // 调试日志写入临时文件（start.bat 终端输出不可见，这里持久化便于排查）
+  try {
+    fs.appendFileSync(path.join(app.getPath('temp'), 'livedanmu-obs.log'),
+      `${new Date().toISOString()} [set-obs-settings] ${s ? JSON.stringify(s).slice(0, 300) : 'null'}\n`)
+  } catch (e) { /* ignore */ }
   obsSettings = s || null
   broadcastObsSettings(obsSettings)
+})
+
+// 渲染进程诊断上报（排查 window.electron 接口可见性）
+ipcMain.on('obs-diag', (_e, info: any) => {
+  try {
+    fs.appendFileSync(path.join(app.getPath('temp'), 'livedanmu-obs.log'),
+      `${new Date().toISOString()} [diag] ${JSON.stringify(info)}\n`)
+  } catch (e) { /* ignore */ }
 })
 
 // 退出时清理全局快捷键与自带后端进程
@@ -428,6 +445,39 @@ const startObsServer = () => {
   }
   try {
     obsServer = http.createServer((req, res) => {
+      const cors = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+      // CORS 预检（控制台 fetch 跨域 POST 设置需要）
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, cors)
+        res.end()
+        return
+      }
+      // 控制台 POST 推送设置（绕开 IPC，走 HTTP 最可靠）：缓存 + SSE 实时广播
+      if (req.method === 'POST' && req.url?.startsWith('/api/settings')) {
+        let body = ''
+        req.on('data', (c) => { body += c })
+        req.on('end', () => {
+          try {
+            const s = JSON.parse(body || '{}')
+            obsSettings = s
+            try {
+              fs.appendFileSync(path.join(app.getPath('temp'), 'livedanmu-obs.log'),
+                `${new Date().toISOString()} [http-push] ${JSON.stringify(s).slice(0, 200)}\n`)
+            } catch (e) { /* ignore */ }
+            broadcastObsSettings(obsSettings)
+            res.writeHead(200, { ...cors, 'Content-Type': 'application/json; charset=utf-8' })
+            res.end('{"ok":true}')
+          } catch (e) {
+            res.writeHead(400, cors)
+            res.end('{"ok":false}')
+          }
+        })
+        return
+      }
       // 当前房间状态接口：供 OBS 弹幕页自动连接
       if (req.url?.startsWith('/api/state')) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })

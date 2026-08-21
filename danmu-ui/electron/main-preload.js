@@ -89,6 +89,10 @@ contextBridge.exposeInMainWorld('electron', {
   sendObsSettings: (settings) => {
     ipcRenderer.send('set-obs-settings', settings)
   },
+  // 诊断上报：把渲染进程可见的接口情况发给主进程写日志（排查用）
+  diag: (info) => {
+    ipcRenderer.send('obs-diag', info)
+  },
   // 设置并即时生效快捷键，返回 { ok, accelerator }
   // key: 'mousePenetration'（默认）或 'overlayEdit'；兼容旧调用 setHotkey(acc)
   setHotkey: (key, acc) => {
