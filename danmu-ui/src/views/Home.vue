@@ -399,6 +399,8 @@ onBeforeMount(() => {
 })
 
 onMounted(() => {
+    // 独立窗口标题，便于 OBS 窗口捕获识别
+    document.title = 'Livedanmu 控制台'
     useStorage('streamer', streamer.info)
     try {
         window.electron.runService()

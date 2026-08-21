@@ -145,6 +145,8 @@ onBeforeMount(() => {
 })
 
 onMounted(() => {
+    // 独立窗口标题，便于 OBS 窗口捕获识别
+    document.title = 'Livedanmu 弹幕窗'
     window.electron.isReady()
     watch(() => signalR.connected(), () => applyIgnoreMouse())
 })

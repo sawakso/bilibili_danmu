@@ -225,11 +225,13 @@ onBeforeMount(() => {
             list-style: none;
             padding: 0;
             margin: 0;
+            contain: layout style;
         }
 
         .message {
             display: flex;
             align-items: center;
+            will-change: transform;
 
             .avatar-medal-name {
                 font-size: 13px;

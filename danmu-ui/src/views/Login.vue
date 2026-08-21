@@ -106,6 +106,7 @@ const searchStreamer = async (query: number) => {
 
 
 onBeforeMount(() => {
+    document.title = 'Livedanmu 登录'
     const storeStreamers = useStorage<Array<IStreamerInfo>>('streamers', [])
     if (storeStreamers.value.length > 0) {
         tempStreamers.value.push(...storeStreamers.value)
