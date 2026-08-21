@@ -295,13 +295,13 @@ onBeforeMount(() => {
 
 
 .danmu-move {
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 }
 
 .danmu-enter-active,
 .danmu-leave-active {
     position: absolute;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 }
 
 .danmu-enter-from {

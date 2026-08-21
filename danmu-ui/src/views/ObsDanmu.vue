@@ -1,5 +1,5 @@
 <template>
-    <div id="obs">
+    <div id="obs" :class="`style-${danmuStyle}`">
         <!-- 设置条（OBS 里可裁剪掉或点隐藏） -->
         <div v-if="showSettings" class="settings">
             <div class="row">
@@ -12,6 +12,12 @@
                     {{ signalR.connected() ? '已连接' : '未连接' }}</span>
             </div>
             <div class="row">
+                <span class="label">样式</span>
+                <select v-model="danmuStyle" class="select" @change="persistStyle">
+                    <option value="glass">玻璃卡片</option>
+                    <option value="neon">霓虹</option>
+                    <option value="minimal">极简</option>
+                </select>
                 <span class="label">字号</span>
                 <input type="range" min="12" max="36" step="1" v-model.number="settings.fontSize" @input="persist" />
                 <span class="val">{{ settings.fontSize }}</span>
@@ -55,9 +61,9 @@ const signalR = useSignalR()
 // 弹幕设置（OBS 页面独立的 localStorage，不影响主程序）
 const settings = reactive({
     count: 15,
-    fontSize: 18,
+    fontSize: 20,
     lineGap: 6,
-    showAvatar: false,
+    showAvatar: true,
     showMedal: true,
     fontFamily: 'Microsoft YaHei',
     fontColor: '',            // 空 = 跟随舰长/粉丝牌颜色
@@ -73,6 +79,12 @@ const persist = () => { try { localStorage.setItem('obs-danmu-settings', JSON.st
 const showSettings = ref(false)
 const roomIdInput = ref(0)
 const connecting = ref(false)
+
+// 弹幕样式：glass 玻璃卡片 / neon 霓虹 / minimal 极简（URL ?style= 或 localStorage 记忆）
+const danmuStyle = ref('glass')
+const qStyle = new URLSearchParams(window.location.hash.split('?')[1] || '').get('style')
+danmuStyle.value = qStyle || localStorage.getItem('obs-danmu-style') || 'glass'
+const persistStyle = () => { try { localStorage.setItem('obs-danmu-style', danmuStyle.value) } catch { } }
 
 // 取色器显示修正
 const fontColorInput = computed({
@@ -270,5 +282,83 @@ body {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+}
+
+.select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #e8eaed;
+    padding: 3px 6px;
+    font-size: 12px;
+
+    option {
+        background: #1c1f26;
+    }
+}
+
+/* ============ 弹幕样式：玻璃卡片 ============ */
+#obs.style-glass {
+    :deep(.danmu-list .message) {
+        // 纯半透明 + 细边框，不用 backdrop-filter（在 OBS 浏览器源里易糊且吃性能）
+        background: linear-gradient(135deg, rgba(30, 34, 44, 0.6), rgba(16, 18, 24, 0.42));
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 5px 14px 5px 8px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    }
+
+    :deep(.name) {
+        background: linear-gradient(135deg, rgba(58, 209, 122, 0.22), rgba(45, 212, 191, 0.22));
+        border: 1px solid rgba(58, 209, 122, 0.35);
+        color: #d6f7e8;
+        border-radius: 8px;
+    }
+
+    :deep(.comment) {
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+    }
+}
+
+/* ============ 弹幕样式：霓虹 ============ */
+#obs.style-neon {
+    :deep(.danmu-list .message) {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 2px 4px;
+    }
+
+    :deep(.comment) {
+        font-weight: 600;
+        text-shadow:
+            0 0 4px rgba(0, 0, 0, 1),
+            0 0 10px rgba(58, 209, 122, 0.35);
+    }
+
+    :deep(.name) {
+        background: rgba(0, 0, 0, 0.35);
+        border-radius: 6px;
+        color: #7cf0c0;
+    }
+}
+
+/* ============ 弹幕样式：极简 ============ */
+#obs.style-minimal {
+    :deep(.danmu-list .message) {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+    }
+
+    :deep(.name) {
+        background: transparent;
+        color: #ffffff;
+    }
+
+    :deep(.comment) {
+        text-shadow: 0 0 2px rgba(0, 0, 0, 0.85);
+    }
 }
 </style>
