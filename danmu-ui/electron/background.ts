@@ -372,6 +372,11 @@ ipcMain.on('hide-main-window', () => {
   }
 })
 
+// 控制台切到"OBS 弹幕"时推送的设置：缓存供 OBS 浏览器源轮询
+ipcMain.on('set-obs-settings', (_e, s: any) => {
+  obsSettings = s || null
+})
+
 // 退出时清理全局快捷键与自带后端进程
 // 用 taskkill /F /T 杀整个进程树，确保 .NET 后端及其子进程全部退出、不留僵尸进程
 const killProcessTree = (proc: any) => {
@@ -397,6 +402,7 @@ app.on('will-quit', () => {
 // （dev 模式直接用 vite dev server：http://localhost:3000/#/obs）
 let obsServer: http.Server | null = null
 let currentRoomId: number = 0
+let obsSettings: any = null // 控制台切到"OBS 弹幕"时推送的设置，供 OBS 页轮询 /api/settings
 const startObsServer = () => {
   if (!isProduction) return
   const port = 3001
@@ -419,6 +425,12 @@ const startObsServer = () => {
       if (req.url?.startsWith('/api/state')) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })
         res.end(JSON.stringify({ roomId: currentRoomId }))
+        return
+      }
+      // 弹幕设置同步接口：控制台调整后 OBS 弹幕页轮询此接口跟随
+      if (req.url?.startsWith('/api/settings')) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })
+        res.end(JSON.stringify(obsSettings || {}))
         return
       }
       const url = (req.url || '/').split('?')[0]

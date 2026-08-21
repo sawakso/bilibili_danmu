@@ -11,6 +11,19 @@
         <div class="section">
             <div class="section-title">弹幕设置</div>
 
+            <div class="row switch-row target-row">
+                <span class="label">控制</span>
+                <label class="switch-item" title="调整本机屏幕上的弹幕悬浮窗">
+                    <input type="radio" name="ctrlTarget" value="overlay" v-model="controlTarget" @change="switchTarget" />
+                    <span>屏幕弹幕窗</span>
+                </label>
+                <label class="switch-item" title="调整 OBS 浏览器源里的弹幕">
+                    <input type="radio" name="ctrlTarget" value="obs" v-model="controlTarget" @change="switchTarget" />
+                    <span>OBS 弹幕</span>
+                </label>
+                <span class="target-hint">{{ controlTarget === 'obs' ? '当前：OBS 弹幕（下面对 OBS 生效）' : '当前：屏幕弹幕窗' }}</span>
+            </div>
+
             <div class="row">
                 <span class="label">字号</span>
                 <input type="range" min="12" max="30" step="1" v-model.number="settings.fontSize" @input="apply" />
@@ -202,23 +215,40 @@ const boxOpacityPercent = computed({
     set: (v: number) => { settings.boxOpacity = v / 100 },
 })
 
+// 控制目标：overlay=本机屏幕弹幕窗 / obs=OBS 浏览器源弹幕；各自独立设置存储
+const controlTarget = ref<'overlay' | 'obs'>(
+    localStorage.getItem('danmu-control-target') === 'obs' ? 'obs' : 'overlay'
+)
+
+const targetKey = () => (controlTarget.value === 'obs' ? 'obs-danmu-settings' : 'danmu-settings')
+
 const load = () => {
     try {
-        const saved = localStorage.getItem('danmu-settings')
+        const saved = localStorage.getItem(targetKey())
         if (saved) Object.assign(settings, JSON.parse(saved))
     } catch { }
 }
 
 const persist = () => {
-    try { localStorage.setItem('danmu-settings', JSON.stringify({ ...settings })) } catch { }
+    try { localStorage.setItem(targetKey(), JSON.stringify({ ...settings })) } catch { }
 }
 
 const apply = () => {
     persist()
-    // 同步到置顶弹幕窗（IPC + storage 事件双通道）
-    if (window.electron.sendDanmuSettings) {
-        window.electron.sendDanmuSettings({ ...settings })
+    if (controlTarget.value === 'obs') {
+        // 同步到 OBS 弹幕页（主进程缓存 -> OBS 页轮询 /api/settings 应用）
+        if (window.electron.sendObsSettings) window.electron.sendObsSettings({ ...settings })
+    } else {
+        // 同步到本机屏幕弹幕窗（IPC + storage 事件双通道）
+        if (window.electron.sendDanmuSettings) window.electron.sendDanmuSettings({ ...settings })
     }
+}
+
+// 切换控制目标：记住选择并加载对应目标的设置
+const switchTarget = () => {
+    localStorage.setItem('danmu-control-target', controlTarget.value)
+    load()
+    apply()
 }
 
 const setColor = (c: string) => {
@@ -695,6 +725,24 @@ onMounted(() => {
         input {
             accent-color: #3ad17a;
         }
+    }
+}
+
+.target-row {
+    background: rgba(58, 209, 122, 0.06);
+    border: 1px solid rgba(58, 209, 122, 0.18);
+    border-radius: 8px;
+    padding: 6px 8px;
+    gap: 14px;
+
+    .target-hint {
+        flex: 1;
+        text-align: right;
+        font-size: 12px;
+        color: #3ad17a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }
 

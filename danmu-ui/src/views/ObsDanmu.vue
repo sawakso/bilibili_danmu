@@ -135,6 +135,20 @@ load()
 autoFetchRoom().then(() => {
     if (roomIdInput.value > 0) connect()
 })
+
+// 跟随控制台：轮询 /api/settings（打包后 app 在 3001 托管本页），控制台切到"OBS 弹幕"调的样式这里自动应用
+setInterval(async () => {
+    try {
+        const res = await fetch('/api/settings')
+        if (res.ok) {
+            const data = await res.json()
+            if (data && Object.keys(data).length > 0) {
+                Object.assign(settings, data)
+                persist()
+            }
+        }
+    } catch (e) { /* dev/独立打开时无此接口，忽略 */ }
+}, 3000)
 </script>
 
 <style lang="scss">

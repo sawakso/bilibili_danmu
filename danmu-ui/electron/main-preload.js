@@ -85,6 +85,10 @@ contextBridge.exposeInMainWorld('electron', {
   hideWindow: () => {
     ipcRenderer.send('hide-main-window')
   },
+  // 推送设置到 OBS 浏览器源弹幕页（控制台切到"OBS 弹幕"时）
+  sendObsSettings: (settings) => {
+    ipcRenderer.send('set-obs-settings', settings)
+  },
   // 设置并即时生效快捷键，返回 { ok, accelerator }
   // key: 'mousePenetration'（默认）或 'overlayEdit'；兼容旧调用 setHotkey(acc)
   setHotkey: (key, acc) => {
