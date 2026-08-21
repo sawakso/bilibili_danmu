@@ -1,10 +1,23 @@
 <template>
     <div id="home" class="panel">
-        <!-- 顶部：状态 + 房间 -->
+        <!-- 顶部：状态 + 房间 + 切换直播间 -->
         <div class="header">
             <span class="dot" :class="signalR.connected() ? 'on' : 'off'"></span>
             <span class="title">{{ streamer.info.roomInfo?.title || '弹幕控制台' }}</span>
             <span class="room" v-if="streamer.info.roomInfo?.roomId">#{{ streamer.info.roomInfo?.roomId }}</span>
+            <button class="mini-btn" @click="switchRoom" title="返回登录页重新选择直播间">切换直播间</button>
+        </div>
+
+        <!-- OBS 浏览器源叠加：复制链接到 OBS 即显示弹幕，样式自动跟随本控制台 -->
+        <div class="section">
+            <div class="section-title">OBS 弹幕叠加（浏览器源）</div>
+            <div class="row">
+                <input type="text" readonly :value="obsUrl" class="text-input obs-url" @click="selectObsUrl" />
+                <button class="mini-btn accent" @click="copyObsUrl">{{ copied ? '已复制 ✓' : '复制链接' }}</button>
+            </div>
+            <div class="row">
+                <span class="hint-msg ok">OBS → 来源 → 添加「浏览器源」→ 粘贴上面链接 → 弹幕透明叠加。样式请在下方切「OBS 弹幕」调整，自动同步。</span>
+            </div>
         </div>
 
         <!-- 弹幕设置 -->
@@ -101,6 +114,11 @@
                         title="屏幕上的弹幕悬浮窗；用 OBS 浏览器源时建议关掉，避免重复显示" />
                     <span>屏幕弹幕窗</span>
                 </label>
+                <label class="switch-item">
+                    <input type="checkbox" v-model="captureOn" @change="toggleCapture"
+                        title="打开独立透明弹幕小窗（可拖动缩放），OBS 用「游戏捕获 → 捕获特定窗口 → 允许透明」或「窗口捕获 → Win10(1903+)」直接抓取，无需抠像" />
+                    <span>OBS 透明窗</span>
+                </label>
             </div>
         </div>
 
@@ -180,6 +198,7 @@
 </template>
 <script setup lang="ts">
 import { reactive, computed, ref, onBeforeMount, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useSignalR } from '../stores/signalRStore';
 import { useStreamer } from '../stores/streamerStore';
 import { AppSetting } from '../utils/appSetting';
@@ -187,6 +206,31 @@ import { useFetch, useStorage } from '@vueuse/core';
 
 const signalR = useSignalR()
 const streamer = useStreamer()
+const router = useRouter()
+
+// OBS 浏览器源链接（app 内置 3001 托管弹幕页，房间号自动跟随控制台连接，URL 固定无需改）
+const obsUrl = 'http://127.0.0.1:3001/#/obs'
+const copied = ref(false)
+const copyObsUrl = async () => {
+    try {
+        await navigator.clipboard.writeText(obsUrl)
+        copied.value = true
+        setTimeout(() => (copied.value = false), 1500)
+    } catch (e) {
+        // 老版本/受限环境降级：选中文本让用户手动复制
+        const el = document.querySelector('.obs-url') as HTMLInputElement | null
+        if (el) { el.select(); el.setSelectionRange(0, 9999) }
+    }
+}
+const selectObsUrl = () => {
+    const el = document.querySelector('.obs-url') as HTMLInputElement | null
+    if (el) el.select()
+}
+
+// 返回登录页重新选择直播间
+const switchRoom = () => {
+    router.push('/login')
+}
 
 const DEFAULT_SETTINGS = {
     count: 15,
@@ -219,6 +263,25 @@ const boxOpacityPercent = computed({
 const controlTarget = ref<'overlay' | 'obs'>(
     localStorage.getItem('danmu-control-target') === 'obs' ? 'obs' : 'overlay'
 )
+
+// OBS 真透明捕获小窗开关（独立可拖拽缩放的透明弹幕窗，OBS 游戏捕获/窗口捕获抓取，无需抠像）
+const captureOn = ref(false)
+const toggleCapture = () => {
+    if (captureOn.value) {
+        // 打开：把直播间信息传给小窗（房间号用于连接弹幕服务）
+        if (window.electron.openCaptureWindow) {
+            window.electron.openCaptureWindow(JSON.parse(JSON.stringify(streamer.info)))
+        }
+    } else {
+        if (window.electron.closeCaptureWindow) window.electron.closeCaptureWindow()
+    }
+}
+// 启动时查询主进程里小窗是否已打开（跨窗口/重启后回显开关状态）
+const fetchCapture = async () => {
+    try {
+        if (window.electron.isCaptureWindowOpen) captureOn.value = !!(await window.electron.isCaptureWindowOpen())
+    } catch (e) { /* 忽略 */ }
+}
 
 const targetKey = () => (controlTarget.value === 'obs' ? 'obs-danmu-settings' : 'danmu-settings')
 
@@ -451,6 +514,7 @@ onMounted(() => {
     }
     // 读取已保存的鼠标穿透快捷键，没有则保持默认
     fetchHotkey()
+    fetchCapture()
     // Overlay 打开后把当前设置同步过去
     setTimeout(() => apply(), 1200)
     // 连接后自动隐藏控制台到托盘（点托盘图标恢复），避免被 OBS 显示器采集拍到
@@ -604,6 +668,16 @@ onMounted(() => {
         border-radius: 6px;
         padding: 4px 8px;
         font-size: 13px;
+    }
+
+    // OBS 浏览器源链接框：紧凑等宽，一眼可复制
+    .obs-url {
+        flex: none;
+        width: 235px;
+        font-family: Consolas, 'Courier New', monospace;
+        font-size: 12px;
+        letter-spacing: 0.3px;
+        cursor: text;
     }
 
     .mini-btn {

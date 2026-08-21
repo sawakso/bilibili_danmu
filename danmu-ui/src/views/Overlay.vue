@@ -133,19 +133,28 @@ onBeforeMount(() => {
 
     streamser.info = window.electron.getStreamerInfo()
 
-    signalR.start().then(() => {
-        useFetch(AppSetting.VITE_API_URL + "/api/barrage/receive")
-            .post(JSON.stringify({
-                connectionId: signalR.connectionId(),
-                roomId: streamser.info.roomInfo.roomId
-            }), 'application/json').json()
-    })
+    // 连接弹幕服务（receiveStreamerInfo 可能晚到，等拿到房间号再连）
+    const connectDanmu = () => {
+        const roomId = streamser.info?.roomInfo?.roomId || 0
+        if (!roomId || roomId <= 0) {
+            setTimeout(connectDanmu, 500)
+            return
+        }
+        signalR.start().then(() => {
+            useFetch(AppSetting.VITE_API_URL + "/api/barrage/receive")
+                .post(JSON.stringify({
+                    connectionId: signalR.connectionId(),
+                    roomId,
+                }), 'application/json').json()
+        })
+    }
+    connectDanmu()
 
     applyIgnoreMouse()
 })
 
 onMounted(() => {
-    // 独立窗口标题，便于 OBS 窗口捕获识别
+    // 独立窗口标题，便于识别
     document.title = 'Livedanmu 弹幕窗'
     window.electron.isReady()
     watch(() => signalR.connected(), () => applyIgnoreMouse())

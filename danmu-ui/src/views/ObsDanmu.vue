@@ -117,12 +117,15 @@ const connect = async () => {
     localStorage.setItem('obs-room', String(roomId))
     connecting.value = true
     try {
-        if (!signalR.connected()) await signalR.start()
-        await useFetch(AppSetting.VITE_API_URL + '/api/barrage/receive')
-            .post(JSON.stringify({
-                connectionId: signalR.connectionId(),
-                roomId,
-            }), 'application/json').json()
+        // 已连接则跳过（避免重复 start / 重复注册接收）
+        if (!signalR.connected()) {
+            await signalR.start()
+            await useFetch(AppSetting.VITE_API_URL + '/api/barrage/receive')
+                .post(JSON.stringify({
+                    connectionId: signalR.connectionId(),
+                    roomId,
+                }), 'application/json').json()
+        }
     } catch (e) {
         console.error('[obs] 连接弹幕服务失败', e)
     } finally {
@@ -135,6 +138,14 @@ load()
 autoFetchRoom().then(() => {
     if (roomIdInput.value > 0) connect()
 })
+
+// 自动重连：后端未就绪/连接断开时每 5 秒重试，连上为止
+setInterval(() => {
+    const roomId = Number(roomIdInput.value)
+    if (!signalR.connected() && roomId > 0 && !connecting.value) {
+        connect()
+    }
+}, 5000)
 
 // 跟随控制台：轮询 /api/settings（打包后 app 在 3001 托管本页），控制台切到"OBS 弹幕"调的样式这里自动应用
 setInterval(async () => {
