@@ -42,7 +42,7 @@
         <div v-else class="gear" title="显示设置" @click="showSettings = true">⚙</div>
 
         <!-- 弹幕区：透明背景，OBS 浏览器源里裁剪/缩放只保留这里 -->
-        <div class="danmu-zone">
+        <div class="danmu-zone" :style="zoneStyle">
             <Barrage :danmu-count="settings.count" entry-effect-direction="left" :show-avatar="settings.showAvatar"
                 :show-medal="settings.showMedal" :settings="settings" />
         </div>
@@ -74,6 +74,12 @@ const settings = reactive({
 })
 const load = () => { try { const s = localStorage.getItem('obs-danmu-settings'); if (s) Object.assign(settings, JSON.parse(s)) } catch { } }
 const persist = () => { try { localStorage.setItem('obs-danmu-settings', JSON.stringify({ ...settings })) } catch { } }
+
+// 弹幕区底板（boxOpacity 由控制台"OBS 弹幕"目标同步，>0 时显示半透明深色底）
+const zoneStyle = computed(() => {
+    const o = settings.boxOpacity ?? 0
+    return o > 0 ? { background: `rgba(18, 20, 24, ${o})` } : {}
+})
 
 // OBS 截图里默认不显示设置条，只显示纯弹幕（齿轮可随时调出），避免占用画面
 const showSettings = ref(false)
@@ -147,7 +153,21 @@ setInterval(() => {
     }
 }, 5000)
 
-// 跟随控制台：轮询 /api/settings（打包后 app 在 3001 托管本页），控制台切到"OBS 弹幕"调的样式这里自动应用
+// 实时跟随控制台：SSE 推送（app 在 3001 提供 /api/events），控制台一调立即生效
+try {
+    const es = new EventSource('/api/events')
+    es.onmessage = (ev) => {
+        try {
+            const data = JSON.parse(ev.data)
+            if (data && Object.keys(data).length > 0) {
+                Object.assign(settings, data)
+                persist()
+            }
+        } catch (e) { /* 忽略 */ }
+    }
+} catch (e) { /* 独立打开时无此接口，靠下方轮询兜底 */ }
+
+// 兜底：每 3 秒轮询 /api/settings（SSE 断线/独立打开时也能跟随）
 setInterval(async () => {
     try {
         const res = await fetch('/api/settings')

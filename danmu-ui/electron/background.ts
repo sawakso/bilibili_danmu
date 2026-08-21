@@ -371,9 +371,10 @@ ipcMain.on('hide-main-window', () => {
   }
 })
 
-// 控制台切到"OBS 弹幕"时推送的设置：缓存供 OBS 浏览器源轮询
+// 控制台切到"OBS 弹幕"时推送的设置：缓存供 OBS 浏览器源轮询，并实时 SSE 推送给已打开的弹幕页
 ipcMain.on('set-obs-settings', (_e, s: any) => {
   obsSettings = s || null
+  broadcastObsSettings(obsSettings)
 })
 
 // 退出时清理全局快捷键与自带后端进程
@@ -398,10 +399,18 @@ app.on('will-quit', () => {
 // ---- OBS 浏览器源弹幕页静态服务 ----
 // 主进程托管 dist（127.0.0.1:3001），OBS 浏览器源加载 http://127.0.0.1:3001/#/obs
 // dev 与打包都启动：OBS 浏览器源 URL 固定不变，房间号/设置自动跟随
-// （dev 下改完前端代码需跑一次 build-only 刷新 dist 才会更新页面）
+// dev 模式下页面请求转发到 vite dev server(3000)，保证前端代码 HMR 即时生效（不依赖 build dist）
 let obsServer: http.Server | null = null
 let currentRoomId: number = 0
 let obsSettings: any = null // 控制台切到"OBS 弹幕"时推送的设置，供 OBS 页轮询 /api/settings
+// SSE 推送：OBS 弹幕页通过 EventSource 订阅，控制台调整设置时实时下发（毫秒级生效）
+let sseClients: http.ServerResponse[] = []
+const broadcastObsSettings = (data: any) => {
+  const payload = `data: ${JSON.stringify(data || {})}\n\n`
+  for (const res of [...sseClients]) {
+    try { res.write(payload) } catch { /* 连接已断，交由 close 清理 */ }
+  }
+}
 const startObsServer = () => {
   const port = 3001
   const mime: Record<string, string> = {
@@ -429,6 +438,44 @@ const startObsServer = () => {
       if (req.url?.startsWith('/api/settings')) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })
         res.end(JSON.stringify(obsSettings || {}))
+        return
+      }
+      // SSE 推送接口：OBS 弹幕页实时订阅设置变化（控制台一调立即生效）
+      if (req.url?.startsWith('/api/events')) {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+        })
+        res.write('retry: 3000\n\n')
+        // 连上先推一次当前设置（页面刷新/重载后立即恢复）
+        res.write(`data: ${JSON.stringify(obsSettings || {})}\n\n`)
+        sseClients.push(res)
+        req.on('close', () => {
+          sseClients = sseClients.filter(c => c !== res)
+        })
+        return
+      }
+      // dev 模式：页面与静态资源转发到 vite dev server(3000)，HMR 即时生效
+      if (!isProduction) {
+        const headers = { ...req.headers }
+        headers['host'] = '127.0.0.1:3000'
+        const upstream = http.request({
+          host: '127.0.0.1', port: 3000,
+          path: req.url || '/', method: req.method || 'GET', headers,
+        }, (upRes) => {
+          const h = { ...upRes.headers }
+          // 防缓存：dev 页面要求最新
+          h['cache-control'] = 'no-store'
+          res.writeHead(upRes.statusCode || 200, h)
+          upRes.pipe(res)
+        })
+        upstream.on('error', () => {
+          res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' })
+          res.end('vite dev server not ready (3000)')
+        })
+        req.pipe(upstream)
         return
       }
       const url = (req.url || '/').split('?')[0]

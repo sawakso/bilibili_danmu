@@ -16,7 +16,14 @@
                 <button class="mini-btn accent" @click="copyObsUrl">{{ copied ? '已复制 ✓' : '复制链接' }}</button>
             </div>
             <div class="row">
-                <span class="hint-msg ok">OBS → 来源 → 添加「浏览器源」→ 粘贴上面链接 → 弹幕透明叠加。样式请在下方切「OBS 弹幕」调整，自动同步。</span>
+                <span class="hint-msg ok">OBS → 来源 → 添加「浏览器源」→ 粘贴链接 → 弹幕透明叠加。调整样式前先点下面按钮切换控制目标。</span>
+            </div>
+            <div class="row">
+                <span class="label">当前控制</span>
+                <span class="target-hint">{{ controlTarget === 'obs' ? 'OBS 弹幕（设置已同步到 OBS）' : '屏幕弹幕窗（只影响本机）' }}</span>
+                <button class="mini-btn" @click="quickSwitchObs" :disabled="controlTarget === 'obs'">
+                    {{ controlTarget === 'obs' ? '已切换 ✓' : '切到 OBS 弹幕' }}
+                </button>
             </div>
         </div>
 
@@ -288,6 +295,11 @@ const switchTarget = () => {
     localStorage.setItem('danmu-control-target', controlTarget.value)
     load()
     apply()
+}
+// OBS 链接区的快捷按钮：一键切到"OBS 弹幕"目标
+const quickSwitchObs = () => {
+    controlTarget.value = 'obs'
+    switchTarget()
 }
 
 const setColor = (c: string) => {
