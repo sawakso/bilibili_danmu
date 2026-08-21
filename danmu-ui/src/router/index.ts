@@ -24,6 +24,12 @@ const router = createRouter({
       component: () => import('../views/Overlay.vue')
     },
     {
+      // OBS 浏览器源弹幕页：无 Electron 依赖，纯浏览器环境显示弹幕（透明背景）
+      path: '/obs',
+      name: 'obs',
+      component: () => import('../views/ObsDanmu.vue')
+    },
+    {
       path: '/shortKey',
       name: 'shortKey',
       component: () => import('../views/ShortKey.vue')

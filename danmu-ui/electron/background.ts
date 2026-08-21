@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import net from "net";
+import http from "http";
 import { spawn } from "child_process";
 import { app, BrowserWindow, ipcMain, globalShortcut } from "electron";
 import { runSocketAndBackgroundService, liveBackend } from './backgroundService'
@@ -163,6 +164,9 @@ if (!gotTheLock) {
     loadConfig()
     registerToggleShortcut()
     registerOverlayEditShortcut()
+
+    // 打包后：托管 dist 静态服务，供 OBS 浏览器源加载弹幕页
+    startObsServer()
 
     // 启动随包自带的 .NET 弹幕后端（开发期不接管）；后台异步等待端口就绪，不阻塞 UI
     startLiveServer()
@@ -355,6 +359,11 @@ ipcMain.on('overlay:edit-mode', () => {
   toggleOverlayEdit()
 })
 
+// 主窗口同步当前直播间房间号（OBS 浏览器源弹幕页自动跟随连接用）
+ipcMain.on('set-room-id', (_e, roomId: number) => {
+  currentRoomId = Number(roomId) || 0
+})
+
 // 退出时清理全局快捷键与自带后端进程
 // 用 taskkill /F /T 杀整个进程树，确保 .NET 后端及其子进程全部退出、不留僵尸进程
 const killProcessTree = (proc: any) => {
@@ -373,6 +382,62 @@ app.on('will-quit', () => {
   killProcessTree(liveServerProc)
   killProcessTree(liveBackend)
 })
+
+// ---- OBS 浏览器源弹幕页静态服务 ----
+// 打包后由主进程托管 dist（127.0.0.1:3001），OBS 浏览器源加载 http://127.0.0.1:3001/#/obs
+// OBS 页面通过 /api/state 自动获取当前房间号（由主窗口同步），无需手动填
+// （dev 模式直接用 vite dev server：http://localhost:3000/#/obs）
+let obsServer: http.Server | null = null
+let currentRoomId: number = 0
+const startObsServer = () => {
+  if (!isProduction) return
+  const port = 3001
+  const mime: Record<string, string> = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.ico': 'image/x-icon',
+    '.json': 'application/json; charset=utf-8',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.map': 'application/json',
+  }
+  try {
+    obsServer = http.createServer((req, res) => {
+      // 当前房间状态接口：供 OBS 弹幕页自动连接
+      if (req.url?.startsWith('/api/state')) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })
+        res.end(JSON.stringify({ roomId: currentRoomId }))
+        return
+      }
+      const url = (req.url || '/').split('?')[0]
+      const rel = url === '/' ? 'index.html' : url.slice(1)
+      const filePath = path.join(distDir, rel)
+      try {
+        if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+          // hash 路由只需 index.html；找不到文件也回退首页
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+          res.end(fs.readFileSync(path.join(distDir, 'index.html')))
+          return
+        }
+        const ext = path.extname(filePath).toLowerCase()
+        res.writeHead(200, { 'Content-Type': mime[ext] || 'application/octet-stream' })
+        res.end(fs.readFileSync(filePath))
+      } catch (e) {
+        res.writeHead(404)
+        res.end('not found')
+      }
+    })
+    obsServer.listen(port, '127.0.0.1', () => {
+      console.log(`[obs] OBS 浏览器源地址: http://127.0.0.1:${port}/#/obs`)
+    })
+  } catch (err) {
+    console.warn('[obs] 静态服务启动失败:', err)
+  }
+}
 
 
 

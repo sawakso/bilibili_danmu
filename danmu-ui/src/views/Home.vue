@@ -388,6 +388,8 @@ const connectRoom = () => {
             roomId: streamer.info.roomInfo.roomId
         }), 'application/json').json()
         console.log('join room :' + streamer.info.roomInfo?.roomId);
+        // 同步房间号给主进程，OBS 浏览器源弹幕页可自动跟随连接
+        if (window.electron.setRoomId) window.electron.setRoomId(streamer.info.roomInfo.roomId)
     }
 }
 

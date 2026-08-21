@@ -77,6 +77,10 @@ contextBridge.exposeInMainWorld('electron', {
   toggleEditMode: () => {
     ipcRenderer.send('overlay:edit-mode')
   },
+  // 同步当前直播间房间号（供 OBS 浏览器源弹幕页自动连接）
+  setRoomId: (roomId) => {
+    ipcRenderer.send('set-room-id', roomId)
+  },
   // 设置并即时生效快捷键，返回 { ok, accelerator }
   // key: 'mousePenetration'（默认）或 'overlayEdit'；兼容旧调用 setHotkey(acc)
   setHotkey: (key, acc) => {
