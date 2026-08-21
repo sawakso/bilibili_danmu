@@ -89,17 +89,6 @@ contextBridge.exposeInMainWorld('electron', {
   sendObsSettings: (settings) => {
     ipcRenderer.send('set-obs-settings', settings)
   },
-  // 打开/关闭"真透明 OBS 捕获小窗"（独立可拖拽透明弹幕窗，OBS 游戏捕获/窗口捕获抓取）
-  openCaptureWindow: (info) => {
-    ipcRenderer.send('capture-window', info)
-  },
-  closeCaptureWindow: () => {
-    ipcRenderer.send('capture-close')
-  },
-  // 查询真透明捕获小窗是否已打开
-  isCaptureWindowOpen: () => {
-    return ipcRenderer.invoke('capture-window-open')
-  },
   // 设置并即时生效快捷键，返回 { ok, accelerator }
   // key: 'mousePenetration'（默认）或 'overlayEdit'；兼容旧调用 setHotkey(acc)
   setHotkey: (key, acc) => {

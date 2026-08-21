@@ -131,11 +131,11 @@ onBeforeMount(() => {
         }
     })
 
-    streamser.info = window.electron.getStreamerInfo()
-
-    // 连接弹幕服务（receiveStreamerInfo 可能晚到，等拿到房间号再连）
+    // 连接弹幕服务：直播间信息经 receiveStreamerInfo 事件晚到 preload，轮询时直接读最新值
     const connectDanmu = () => {
-        const roomId = streamser.info?.roomInfo?.roomId || 0
+        const info: any = window.electron.getStreamerInfo()
+        if (info && info.roomInfo?.roomId) streamser.info = info // 更新标题等显示
+        const roomId = info?.roomInfo?.roomId || 0
         if (!roomId || roomId <= 0) {
             setTimeout(connectDanmu, 500)
             return

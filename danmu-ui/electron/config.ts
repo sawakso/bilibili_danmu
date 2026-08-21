@@ -4,24 +4,14 @@ import path from 'path'
 
 // 用户可自定义的配置；目前有"鼠标穿透"切换快捷键与"弹幕区域调整"快捷键。
 // 持久化到 app.getPath('userData')/config.json，跨启动生效。
-export interface CaptureBounds {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-}
-
 export const CONFIG_DEFAULTS: {
   mousePenetrationHotkey: string;
   overlayEditHotkey: string;
-  captureBounds?: CaptureBounds;
 } = {
   // Electron globalShortcut 加速器字符串，Windows 上 CommandOrControl 等价 Ctrl
   mousePenetrationHotkey: 'CommandOrControl+Shift+G',
   // 进入/退出"弹幕区域调整"模式的全局快捷键
   overlayEditHotkey: 'CommandOrControl+Shift+E',
-  // 独立捕获弹幕窗的位置/尺寸记忆（undefined = 使用默认值）
-  captureBounds: undefined,
 }
 
 type AppConfig = typeof CONFIG_DEFAULTS

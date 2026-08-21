@@ -114,11 +114,6 @@
                         title="屏幕上的弹幕悬浮窗；用 OBS 浏览器源时建议关掉，避免重复显示" />
                     <span>屏幕弹幕窗</span>
                 </label>
-                <label class="switch-item">
-                    <input type="checkbox" v-model="captureOn" @change="toggleCapture"
-                        title="打开独立透明弹幕小窗（可拖动缩放），OBS 用「游戏捕获 → 捕获特定窗口 → 允许透明」或「窗口捕获 → Win10(1903+)」直接抓取，无需抠像" />
-                    <span>OBS 透明窗</span>
-                </label>
             </div>
         </div>
 
@@ -263,25 +258,6 @@ const boxOpacityPercent = computed({
 const controlTarget = ref<'overlay' | 'obs'>(
     localStorage.getItem('danmu-control-target') === 'obs' ? 'obs' : 'overlay'
 )
-
-// OBS 真透明捕获小窗开关（独立可拖拽缩放的透明弹幕窗，OBS 游戏捕获/窗口捕获抓取，无需抠像）
-const captureOn = ref(false)
-const toggleCapture = () => {
-    if (captureOn.value) {
-        // 打开：把直播间信息传给小窗（房间号用于连接弹幕服务）
-        if (window.electron.openCaptureWindow) {
-            window.electron.openCaptureWindow(JSON.parse(JSON.stringify(streamer.info)))
-        }
-    } else {
-        if (window.electron.closeCaptureWindow) window.electron.closeCaptureWindow()
-    }
-}
-// 启动时查询主进程里小窗是否已打开（跨窗口/重启后回显开关状态）
-const fetchCapture = async () => {
-    try {
-        if (window.electron.isCaptureWindowOpen) captureOn.value = !!(await window.electron.isCaptureWindowOpen())
-    } catch (e) { /* 忽略 */ }
-}
 
 const targetKey = () => (controlTarget.value === 'obs' ? 'obs-danmu-settings' : 'danmu-settings')
 
@@ -514,7 +490,6 @@ onMounted(() => {
     }
     // 读取已保存的鼠标穿透快捷键，没有则保持默认
     fetchHotkey()
-    fetchCapture()
     // Overlay 打开后把当前设置同步过去
     setTimeout(() => apply(), 1200)
     // 连接后自动隐藏控制台到托盘（点托盘图标恢复），避免被 OBS 显示器采集拍到

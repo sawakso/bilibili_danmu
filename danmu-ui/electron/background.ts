@@ -8,7 +8,6 @@ import { runSocketAndBackgroundService, liveBackend } from './backgroundService'
 import { loadConfig, getConfig, setConfig } from './config'
 import { createLoadingWindow, loadingWindow } from './windows/loadingWindow'
 import { createOverlayWindow, overlayWindow } from './windows/overlayWindow'
-import { createCaptureWindow, getCaptureWindow, closeCaptureWindow } from './windows/captureWindow'
 import { gotTheLock, mainWindowUrl, windowsIsTrueMacIsFalse, isDevelopment, isProduction, distDir } from './consts'
 import createTray from "./components/appTray";
 
@@ -19,7 +18,6 @@ let isOverlayIgnoreMouse: boolean = true;
 let isManualSetCover: boolean = false;
 let isOverlayWindowsReady = false
 let lastDanmuSettings: any = null // 缓存最新弹幕设置，Overlay 就绪后补发
-let lastStreamerInfo: any = null // 缓存直播间信息，供"真透明捕获小窗"等窗口补发
 
 // 已注册的"鼠标穿透"快捷键加速器（用于改键时先反注册旧的）
 let registeredHotkey: string | null = null
@@ -232,7 +230,6 @@ const createMainWindow = () => {
         overlayWindow.hide()
         overlayWindow.close()
       }
-      closeCaptureWindow()
     }
   })
 
@@ -300,8 +297,6 @@ ipcMain.once('runService', () => {
 
 
 ipcMain.on('overlay', (e, info) => {
-  lastStreamerInfo = info
-
   createOverlayWindow(() => {
     // 注册（或重注册）全局快捷键，加速器来自用户配置
     registerToggleShortcut()
@@ -336,25 +331,6 @@ ipcMain.on('danmu-settings', (e, settings) => {
   if (overlayWindow != null && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('danmu-settings', settings)
   }
-  // 真透明捕获小窗同步同一份设置
-  const cw = getCaptureWindow()
-  if (cw != null && !cw.isDestroyed()) {
-    cw.webContents.send('danmu-settings', settings)
-  }
-})
-
-// 打开/关闭"真透明 OBS 捕获小窗"：独立可拖拽缩放的透明弹幕窗，
-// OBS 里用「游戏捕获 -> 捕获特定窗口 -> 允许透明」或「窗口捕获 -> Win10(1903+)」抓取
-ipcMain.on('capture-window', (e, info) => {
-  createCaptureWindow(info || lastStreamerInfo)
-})
-ipcMain.on('capture-close', () => {
-  closeCaptureWindow()
-})
-// 渲染端查询小窗是否打开（控制台开关回显用）
-ipcMain.handle('capture-window-open', () => {
-  const cw = getCaptureWindow()
-  return cw != null && !cw.isDestroyed()
 })
 
 // 渲染端读取当前配置（如快捷键）
@@ -415,7 +391,6 @@ const killProcessTree = (proc: any) => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
-  closeCaptureWindow()
   killProcessTree(liveServerProc)
   killProcessTree(liveBackend)
 })

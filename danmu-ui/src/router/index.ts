@@ -30,12 +30,6 @@ const router = createRouter({
       component: () => import('../views/ObsDanmu.vue')
     },
     {
-      // OBS 窗口捕获弹幕页：独立透明小窗（供 OBS 游戏捕获/窗口捕获抓取）
-      path: '/capture',
-      name: 'capture',
-      component: () => import('../views/CaptureDanmu.vue')
-    },
-    {
       path: '/shortKey',
       name: 'shortKey',
       component: () => import('../views/ShortKey.vue')
